@@ -17,7 +17,7 @@
 package io.activej.http;
 
 import io.activej.bytebuf.ByteBuf;
-import io.activej.common.exception.StacklessException;
+import io.activej.common.exception.CloseException;
 import io.activej.common.exception.parse.ParseException;
 import io.activej.common.exception.parse.UnknownFormatException;
 import io.activej.csp.ChannelSupplier;
@@ -90,9 +90,8 @@ import static java.nio.charset.StandardCharsets.ISO_8859_1;
  * </pre>
  */
 public final class HttpClientConnection extends AbstractHttpConnection {
-	public static final ParseException INVALID_RESPONSE = new UnknownFormatException(HttpClientConnection.class, "Invalid response");
-	public static final StacklessException CONNECTION_CLOSED = new StacklessException(HttpClientConnection.class, "Connection closed");
-	public static final StacklessException NOT_ACCEPTED_RESPONSE = new StacklessException(HttpClientConnection.class, "Response was not accepted");
+	private static final ParseException INVALID_RESPONSE = new UnknownFormatException(HttpClientConnection.class, "Invalid response");
+	private static final CloseException CONNECTION_CLOSED = new CloseException(HttpClientConnection.class, "Connection closed");
 
 	static final HttpHeaderValue CONNECTION_UPGRADE_HEADER = HttpHeaderValue.of("upgrade");
 	static final HttpHeaderValue UPGRADE_WEBSOCKET_HEADER = HttpHeaderValue.of("websocket");

@@ -3,6 +3,7 @@ package io.activej.csp.process;
 import io.activej.bytebuf.ByteBuf;
 import io.activej.bytebuf.ByteBufQueue;
 import io.activej.bytebuf.ByteBufStrings;
+import io.activej.common.exception.parse.UnexpectedDataException;
 import io.activej.csp.ChannelConsumer;
 import io.activej.csp.ChannelSupplier;
 import io.activej.test.rules.ByteBufRule;
@@ -11,11 +12,11 @@ import net.jpountz.lz4.LZ4Factory;
 import org.junit.ClassRule;
 import org.junit.Test;
 
-import static io.activej.csp.binary.BinaryChannelSupplier.UNEXPECTED_DATA_EXCEPTION;
 import static io.activej.promise.TestUtils.await;
 import static io.activej.promise.TestUtils.awaitException;
 import static java.nio.charset.StandardCharsets.UTF_8;
-import static org.junit.Assert.assertSame;
+import static org.hamcrest.Matchers.instanceOf;
+import static org.junit.Assert.assertThat;
 
 public class ChannelLZ4DecompressorTest {
 
@@ -41,6 +42,6 @@ public class ChannelLZ4DecompressorTest {
 				.transformWith(decompressor)
 				.streamTo(ChannelConsumer.ofConsumer(data -> System.out.println(data.asString(UTF_8)))));
 
-		assertSame(UNEXPECTED_DATA_EXCEPTION, e);
+		assertThat(e, instanceOf(UnexpectedDataException.class));
 	}
 }

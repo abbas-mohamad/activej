@@ -16,10 +16,8 @@
 
 package io.activej.ot.exceptions;
 
-public class OTNoCommitException extends OTException {
-	private static final String NO_COMMIT_MESSAGE = "No commit with id: ";
-
-	public OTNoCommitException(long revisionId) {
-		super(NO_COMMIT_MESSAGE + revisionId);
+public class GraphExhaustedException extends OTException {
+	public GraphExhaustedException(Class<?> component, String message) {
+		super(component, message);
 	}
 }

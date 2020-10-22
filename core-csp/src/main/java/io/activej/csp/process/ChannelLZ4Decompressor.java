@@ -20,7 +20,6 @@ import io.activej.bytebuf.ByteBuf;
 import io.activej.bytebuf.ByteBufPool;
 import io.activej.bytebuf.ByteBufQueue;
 import io.activej.common.exception.parse.ParseException;
-import io.activej.common.exception.parse.TruncatedDataException;
 import io.activej.common.inspector.BaseInspector;
 import io.activej.csp.ChannelConsumer;
 import io.activej.csp.ChannelOutput;
@@ -28,7 +27,6 @@ import io.activej.csp.binary.BinaryChannelInput;
 import io.activej.csp.binary.BinaryChannelSupplier;
 import io.activej.csp.dsl.WithBinaryChannelInput;
 import io.activej.csp.dsl.WithChannelTransformer;
-import io.activej.promise.Promise;
 import net.jpountz.lz4.LZ4Exception;
 import net.jpountz.lz4.LZ4Factory;
 import net.jpountz.lz4.LZ4FastDecompressor;
@@ -37,14 +35,13 @@ import net.jpountz.xxhash.StreamingXXHash32;
 import net.jpountz.xxhash.XXHashFactory;
 import org.jetbrains.annotations.Nullable;
 
-import static io.activej.csp.binary.BinaryChannelSupplier.UNEXPECTED_END_OF_STREAM_EXCEPTION;
 import static io.activej.csp.process.ChannelLZ4Compressor.*;
 import static java.lang.Math.min;
 
 public final class ChannelLZ4Decompressor extends AbstractCommunicatingProcess
 		implements WithChannelTransformer<ChannelLZ4Decompressor, ByteBuf, ByteBuf>, WithBinaryChannelInput<ChannelLZ4Decompressor> {
 	public static final int HEADER_LENGTH = ChannelLZ4Compressor.HEADER_LENGTH;
-	public static final ParseException STREAM_IS_CORRUPTED = new ParseException(ChannelLZ4Decompressor.class, "Stream is corrupted");
+	private static final ParseException STREAM_IS_CORRUPTED = new ParseException(ChannelLZ4Decompressor.class, "Stream is corrupted");
 
 	private final LZ4FastDecompressor decompressor;
 	private final StreamingXXHash32 checksum;
@@ -86,7 +83,7 @@ public final class ChannelLZ4Decompressor extends AbstractCommunicatingProcess
 	@Override
 	public BinaryChannelInput getInput() {
 		return input -> {
-			this.input = input;
+			this.input = sanitize(input);
 			this.bufs = input.getBufs();
 			if (this.input != null && this.output != null) startProcess();
 			return getProcessCompletion();
@@ -118,8 +115,6 @@ public final class ChannelLZ4Decompressor extends AbstractCommunicatingProcess
 				}
 			}
 			input.needMoreData()
-					.thenEx(ChannelLZ4Decompressor::checkTruncatedDataException)
-					.thenEx(this::sanitize)
 					.whenResult(this::processHeader);
 			return;
 		}
@@ -140,7 +135,6 @@ public final class ChannelLZ4Decompressor extends AbstractCommunicatingProcess
 		}
 
 		input.endOfStream()
-				.thenEx(this::sanitize)
 				.then(output::acceptEndOfStream)
 				.whenResult(this::completeProcess);
 	}
@@ -148,8 +142,6 @@ public final class ChannelLZ4Decompressor extends AbstractCommunicatingProcess
 	public void processBody() {
 		if (!bufs.hasRemainingBytes(header.compressedLen)) {
 			input.needMoreData()
-					.thenEx(ChannelLZ4Decompressor::checkTruncatedDataException)
-					.thenEx(this::sanitize)
 					.whenResult(this::processBody);
 			return;
 		}
@@ -241,18 +233,6 @@ public final class ChannelLZ4Decompressor extends AbstractCommunicatingProcess
 			throw STREAM_IS_CORRUPTED;
 		}
 		return outputBuf;
-	}
-
-	private static Promise<Void> checkTruncatedDataException(Void $, Throwable e) {
-		if (e == null) {
-			return Promise.complete();
-		} else {
-			if (e == UNEXPECTED_END_OF_STREAM_EXCEPTION) {
-				return Promise.ofException(new TruncatedDataException(ChannelLZ4Decompressor.class, "Unexpected end-of-stream"));
-			} else {
-				return Promise.ofException(e);
-			}
-		}
 	}
 
 }

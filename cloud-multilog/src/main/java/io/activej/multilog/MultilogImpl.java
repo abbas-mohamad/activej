@@ -18,8 +18,10 @@ package io.activej.multilog;
 
 import io.activej.bytebuf.ByteBuf;
 import io.activej.common.MemSize;
+import io.activej.common.exception.parse.ParseException;
 import io.activej.common.exception.parse.TruncatedDataException;
 import io.activej.common.time.Stopwatch;
+import io.activej.csp.ChannelSupplier;
 import io.activej.csp.process.ChannelLZ4Compressor;
 import io.activej.csp.process.ChannelLZ4Decompressor;
 import io.activej.datastream.StreamConsumer;
@@ -48,8 +50,6 @@ import java.util.List;
 import java.util.Objects;
 
 import static io.activej.common.Checks.checkArgument;
-import static io.activej.csp.binary.BinaryChannelSupplier.UNEXPECTED_DATA_EXCEPTION;
-import static io.activej.csp.process.ChannelLZ4Decompressor.STREAM_IS_CORRUPTED;
 import static io.activej.datastream.stats.StreamStatsSizeCounter.forByteBufs;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static java.util.stream.Collectors.toList;
@@ -190,14 +190,15 @@ public final class MultilogImpl<T> implements Multilog<T>, EventloopJmxBeanEx {
 														position, fs, namingScheme.path(logPartition, currentPosition.getLogFile()),
 														sw, inputStreamPosition, e);
 											}
-											return Promise.of(StreamSupplier.closing());
+											return Promise.of(ChannelSupplier.<ByteBuf>of());
 										}
-										return Promise.ofException(e);
 									}
-
+									return Promise.of(fileStream, e);
+								})
+								.map(fileStream -> {
 									inputStreamPosition = 0L;
 									sw.reset().start();
-									return Promise.of(fileStream
+									return fileStream
 											.transformWith(streamReads.register(logPartition + ":" + currentLogFile + "@" + position))
 											.transformWith(streamReadStats)
 											.transformWith(ChannelLZ4Decompressor.create()
@@ -214,28 +215,26 @@ public final class MultilogImpl<T> implements Multilog<T>, EventloopJmxBeanEx {
 													}))
 											.transformWith(supplier ->
 													supplier.withEndOfStream(eos ->
-															eos.thenEx(($, e2) -> {
-																if (e2 == null) {
+															eos.thenEx(($, e) -> {
+																if (e == null) {
 																	return Promise.complete();
 																}
-																if (e2 instanceof TruncatedDataException) {
+																if (e instanceof TruncatedDataException) {
 																	return Promise.complete();
 																}
-																if (ignoreMalformedLogs &&
-																		(e2 == STREAM_IS_CORRUPTED ||
-																				e2 == UNEXPECTED_DATA_EXCEPTION)) {
+																if (ignoreMalformedLogs && e instanceof ParseException) {
 																	if (logger.isWarnEnabled()) {
 																		logger.warn("Ignoring malformed log file {}:`{}` in {}, previous position: {}",
 																				fs, namingScheme.path(logPartition, currentPosition.getLogFile()),
-																				sw, inputStreamPosition, e2);
+																				sw, inputStreamPosition, e);
 																	}
 																	return Promise.complete();
 																}
-																return Promise.ofException(e2);
+																return Promise.ofException(e);
 															})))
 											.transformWith(ChannelDeserializer.create(serializer))
 											.withEndOfStream(eos ->
-													eos.whenComplete(($, e2) -> log(e2))));
+													eos.whenComplete(($, e) -> log(e)));
 								}));
 			}
 

@@ -17,9 +17,9 @@
 package io.activej.ot;
 
 import io.activej.async.function.AsyncPredicate;
-import io.activej.common.exception.StacklessException;
 import io.activej.common.ref.Ref;
 import io.activej.ot.OTCommitFactory.DiffsWithLevel;
+import io.activej.ot.exceptions.GraphExhaustedException;
 import io.activej.ot.exceptions.OTException;
 import io.activej.ot.reducers.AbstractGraphReducer;
 import io.activej.ot.reducers.DiffsReducer;
@@ -53,7 +53,7 @@ import static java.util.stream.Collectors.toSet;
 public final class OTAlgorithms {
 	private static final Logger logger = LoggerFactory.getLogger(OTAlgorithms.class);
 
-	public static final StacklessException GRAPH_EXHAUSTED = new StacklessException(OTAlgorithms.class, "Graph exhausted");
+	private static final GraphExhaustedException GRAPH_EXHAUSTED = new GraphExhaustedException(OTAlgorithms.class, "Graph exhausted");
 
 	public static <K, D, R> Promise<R> reduce(OTRepository<K, D> repository, OTSystem<D> system,
 			Set<K> heads, GraphReducer<K, D, R> reducer) {
